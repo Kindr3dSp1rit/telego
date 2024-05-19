@@ -1,0 +1,101 @@
+openapi: 3.0.3
+info:
+  title: Telegram Bot API Specification
+  description: Manually written schema with only required models and parameters
+  version: 0.0.1
+
+externalDocs:
+  description: Official Telegram Bot API reference
+  url: https://core.telegram.org/bots/api
+
+servers:
+  - url: https://api.telegram.org
+    description: Telegram Bot API
+
+paths:
+  /bot{token}/getMe:
+    parameters:
+      - $ref: '#/components/parameters/token'
+    description: A simple method for testing your bot's authentication token. Requires no parameters. Returns basic information about the bot in form of a User object.
+    get:
+      parameters:
+        - in: path
+          name: token
+          schema:
+            type: string
+          required: true
+          description: Auth token acquired from @BotFather
+      responses:
+        200:
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      result:
+                        $ref: '#/components/schemas/User'
+components:
+  parameters:
+    token:
+      in: path
+      name: token
+      schema:
+        type: string
+      required: true
+      description: Auth token acquired from @BotFather
+  schemas:
+    responseFieldOK:
+      type: object
+      description: ok field is present in all responses
+      required:
+        - ok
+      properties:
+        ok:
+          type: boolean
+    SuccessResponse:
+      description: 'Request was successful, the result is returned.'
+      allOf:
+        - $ref: '#/components/schemas/responseFieldOK'
+        - type: object
+          required:
+            - result
+          properties:
+            result:
+              type: object
+    User:
+      description: 'This object represents a Telegram user or bot.'
+      required:
+        - id
+        - is_bot
+        - first_name
+      properties:
+        id:
+          type: integer
+        is_bot:
+          type: boolean
+        first_name:
+          description:
+            User's or bot's first name
+          type: string
+        last_name:
+          type: string
+        username:
+          type: string
+        language_code:
+          type: string
+        is_premium:
+          type: boolean
+          default: true
+        added_to_attachment_menu:
+          type: boolean
+          default: true
+        can_join_groups:
+          type: boolean
+        can_read_all_group_messages:
+          type: boolean
+        supports_inline_queries:
+          type: boolean
+      type: object
