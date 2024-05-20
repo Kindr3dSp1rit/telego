@@ -4,6 +4,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,20 +16,57 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Chat This object represents a chat.
+type Chat struct {
+	FirstName *string  `json:"first_name,omitempty"`
+	Id        int      `json:"id"`
+	LastName  *string  `json:"last_name,omitempty"`
+	Title     *string  `json:"title,omitempty"`
+	Type      ChatType `json:"type"`
+	Username  *string  `json:"username,omitempty"`
+}
+
+// ChatType defines model for ChatType.
+type ChatType = interface{}
+
+// Message This object represents a message.
+type Message struct {
+	// Chat This object represents a chat.
+	Chat      Chat    `json:"chat"`
+	Date      int     `json:"date"`
+	MessageId int     `json:"message_id"`
+	Text      *string `json:"text,omitempty"`
+}
+
 // SuccessResponse defines model for SuccessResponse.
 type SuccessResponse struct {
 	Ok     bool                   `json:"ok"`
 	Result map[string]interface{} `json:"result"`
 }
 
-// User This object represents a Telegram user or bot.
+// Update This object represents an incoming update. At most one of the optional parameters can be present in any given update.
+type Update struct {
+	// EditedMessage This object represents a message.
+	EditedMessage *Message `json:"edited_message,omitempty"`
+
+	// Message This object represents a message.
+	Message  *Message `json:"message,omitempty"`
+	UpdateId int      `json:"update_id"`
+}
+
+// UpdateType defines model for UpdateType.
+type UpdateType = interface{}
+
+// User This object represents a Telegram user or bot
 type User struct {
 	AddedToAttachmentMenu   *bool `json:"added_to_attachment_menu,omitempty"`
 	CanJoinGroups           *bool `json:"can_join_groups,omitempty"`
 	CanReadAllGroupMessages *bool `json:"can_read_all_group_messages,omitempty"`
 
 	// FirstName User's or bot's first name
-	FirstName             string  `json:"first_name"`
+	FirstName string `json:"first_name"`
+
+	// Id Unique identifier for this user or bot. This number may have more than 32 significant bits and some programming languages may have difficulty/silent defects in interpreting it. But it has at most 52 significant bits, so a 64-bit integer or double-precision float type are safe for storing this identifier.
 	Id                    int     `json:"id"`
 	IsBot                 bool    `json:"is_bot"`
 	IsPremium             *bool   `json:"is_premium,omitempty"`
@@ -43,8 +81,19 @@ type ResponseFieldOK struct {
 	Ok bool `json:"ok"`
 }
 
-// AuthToken defines model for authToken.
-type AuthToken = string
+// Token defines model for token.
+type Token = string
+
+// PostBotTokenGetUpdatesJSONBody defines parameters for PostBotTokenGetUpdates.
+type PostBotTokenGetUpdatesJSONBody struct {
+	AllowedUpdates *[]UpdateType `json:"allowed_updates,omitempty"`
+	Limit          *int          `json:"limit,omitempty"`
+	Offset         *int          `json:"offset,omitempty"`
+	Timeout        *int          `json:"timeout,omitempty"`
+}
+
+// PostBotTokenGetUpdatesJSONRequestBody defines body for PostBotTokenGetUpdates for application/json ContentType.
+type PostBotTokenGetUpdatesJSONRequestBody PostBotTokenGetUpdatesJSONBody
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -121,10 +170,39 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 type ClientInterface interface {
 	// GetBotTokenGetMe request
 	GetBotTokenGetMe(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostBotTokenGetUpdatesWithBody request with any body
+	PostBotTokenGetUpdatesWithBody(ctx context.Context, token Token, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PostBotTokenGetUpdates(ctx context.Context, token Token, body PostBotTokenGetUpdatesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) GetBotTokenGetMe(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetBotTokenGetMeRequest(c.Server, token)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostBotTokenGetUpdatesWithBody(ctx context.Context, token Token, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostBotTokenGetUpdatesRequestWithBody(c.Server, token, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostBotTokenGetUpdates(ctx context.Context, token Token, body PostBotTokenGetUpdatesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostBotTokenGetUpdatesRequest(c.Server, token, body)
 	if err != nil {
 		return nil, err
 	}
@@ -165,6 +243,53 @@ func NewGetBotTokenGetMeRequest(server string, token string) (*http.Request, err
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewPostBotTokenGetUpdatesRequest calls the generic PostBotTokenGetUpdates builder with application/json body
+func NewPostBotTokenGetUpdatesRequest(server string, token Token, body PostBotTokenGetUpdatesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostBotTokenGetUpdatesRequestWithBody(server, token, "application/json", bodyReader)
+}
+
+// NewPostBotTokenGetUpdatesRequestWithBody generates requests for PostBotTokenGetUpdates with any type of body
+func NewPostBotTokenGetUpdatesRequestWithBody(server string, token Token, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "token", runtime.ParamLocationPath, token)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/bot%s/getUpdates", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -214,6 +339,11 @@ func WithBaseURL(baseURL string) ClientOption {
 type ClientWithResponsesInterface interface {
 	// GetBotTokenGetMeWithResponse request
 	GetBotTokenGetMeWithResponse(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*GetBotTokenGetMeResponse, error)
+
+	// PostBotTokenGetUpdatesWithBodyWithResponse request with any body
+	PostBotTokenGetUpdatesWithBodyWithResponse(ctx context.Context, token Token, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostBotTokenGetUpdatesResponse, error)
+
+	PostBotTokenGetUpdatesWithResponse(ctx context.Context, token Token, body PostBotTokenGetUpdatesJSONRequestBody, reqEditors ...RequestEditorFn) (*PostBotTokenGetUpdatesResponse, error)
 }
 
 type GetBotTokenGetMeResponse struct {
@@ -222,7 +352,7 @@ type GetBotTokenGetMeResponse struct {
 	JSON200      *struct {
 		Ok bool `json:"ok"`
 
-		// Result This object represents a Telegram user or bot.
+		// Result This object represents a Telegram user or bot
 		Result User `json:"result"`
 	}
 }
@@ -243,6 +373,31 @@ func (r GetBotTokenGetMeResponse) StatusCode() int {
 	return 0
 }
 
+type PostBotTokenGetUpdatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Ok     bool     `json:"ok"`
+		Result []Update `json:"result"`
+	}
+}
+
+// Status returns HTTPResponse.Status
+func (r PostBotTokenGetUpdatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostBotTokenGetUpdatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 // GetBotTokenGetMeWithResponse request returning *GetBotTokenGetMeResponse
 func (c *ClientWithResponses) GetBotTokenGetMeWithResponse(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*GetBotTokenGetMeResponse, error) {
 	rsp, err := c.GetBotTokenGetMe(ctx, token, reqEditors...)
@@ -250,6 +405,23 @@ func (c *ClientWithResponses) GetBotTokenGetMeWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseGetBotTokenGetMeResponse(rsp)
+}
+
+// PostBotTokenGetUpdatesWithBodyWithResponse request with arbitrary body returning *PostBotTokenGetUpdatesResponse
+func (c *ClientWithResponses) PostBotTokenGetUpdatesWithBodyWithResponse(ctx context.Context, token Token, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostBotTokenGetUpdatesResponse, error) {
+	rsp, err := c.PostBotTokenGetUpdatesWithBody(ctx, token, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostBotTokenGetUpdatesResponse(rsp)
+}
+
+func (c *ClientWithResponses) PostBotTokenGetUpdatesWithResponse(ctx context.Context, token Token, body PostBotTokenGetUpdatesJSONRequestBody, reqEditors ...RequestEditorFn) (*PostBotTokenGetUpdatesResponse, error) {
+	rsp, err := c.PostBotTokenGetUpdates(ctx, token, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostBotTokenGetUpdatesResponse(rsp)
 }
 
 // ParseGetBotTokenGetMeResponse parses an HTTP response from a GetBotTokenGetMeWithResponse call
@@ -270,8 +442,37 @@ func ParseGetBotTokenGetMeResponse(rsp *http.Response) (*GetBotTokenGetMeRespons
 		var dest struct {
 			Ok bool `json:"ok"`
 
-			// Result This object represents a Telegram user or bot.
+			// Result This object represents a Telegram user or bot
 			Result User `json:"result"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostBotTokenGetUpdatesResponse parses an HTTP response from a PostBotTokenGetUpdatesWithResponse call
+func ParsePostBotTokenGetUpdatesResponse(rsp *http.Response) (*PostBotTokenGetUpdatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostBotTokenGetUpdatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Ok     bool     `json:"ok"`
+			Result []Update `json:"result"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err

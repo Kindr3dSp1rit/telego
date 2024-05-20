@@ -46,3 +46,15 @@ func (b *Bot) GetMe(ctx context.Context) (*api.User, error) {
 	}
 	return &resp.JSON200.Result, nil
 }
+
+func (b *Bot) GetUpdates(ctx context.Context, limit, offset int) ([]api.Update, error) {
+	req := api.PostBotTokenGetUpdatesJSONRequestBody{
+		Limit:  &limit,
+		Offset: &offset,
+	}
+	resp, err := b.apiCli.PostBotTokenGetUpdatesWithResponse(ctx, b.authToken, req)
+	if err != nil {
+		return nil, err
+	}
+	return resp.JSON200.Result, nil
+}

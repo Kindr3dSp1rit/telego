@@ -37,6 +37,43 @@ paths:
                     properties:
                       result:
                         $ref: '#/components/schemas/User'
+  /bot{token}/getUpdates:
+    parameters:
+      - $ref: '#/components/parameters/token'
+    description: Use this method to receive incoming updates using long polling. Returns an Array of Update objects.
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                offset:
+                  type: integer
+                limit:
+                  type: integer
+                  default: 100
+                timeout:
+                  type: integer
+                allowed_updates:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/UpdateType'
+      responses:
+        200:
+          description: 'Request was successful, the result is returned.'
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      result:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Update'
+
 components:
   parameters:
     token:
@@ -56,17 +93,18 @@ components:
         ok:
           type: boolean
     SuccessResponse:
-      description: 'Request was successful, the result is returned.'
+      description: Request was successful, the result is returned
       allOf:
-        - $ref: '#/components/schemas/responseFieldOK'
         - type: object
           required:
             - result
           properties:
             result:
               type: object
+        - $ref: '#/components/schemas/responseFieldOK'
     User:
-      description: 'This object represents a Telegram user or bot.'
+      type: object
+      description: This object represents a Telegram user or bot
       required:
         - id
         - is_bot
@@ -74,6 +112,9 @@ components:
       properties:
         id:
           type: integer
+          description: Unique identifier for this user or bot. This number may have more than 32 significant bits and
+            some programming languages may have difficulty/silent defects in interpreting it. But it has at most 52
+            significant bits, so a 64-bit integer or double-precision float type are safe for storing this identifier.
         is_bot:
           type: boolean
         first_name:
@@ -98,4 +139,82 @@ components:
           type: boolean
         supports_inline_queries:
           type: boolean
+    Update:
+      description: This object represents an incoming update. At most one of the optional parameters can be present in any given update.
+      minProperties: 1
+      maxProperties: 2 # at most one of the update types is possible at a time and update_id is always present
+      required:
+        - update_id
+      properties:
+        update_id:
+          type: integer
+        message:
+          $ref: '#/components/schemas/Message'
+        edited_message:
+          $ref: '#/components/schemas/Message'
       type: object
+    UpdateType:
+      enum:
+        - message
+        - edited_message #TODO
+        - channel_post #TODO
+        - edited_channel_post #TODO
+        - business_connection #TODO
+        - business_message #TODO
+        - edited_business_message #TODO
+        - deleted_business_messages #TODO
+        - message_reaction #TODO
+        - message_reaction_count #TODO
+        - inline_query #TODO
+        - chosen_inline_result #TODO
+        - callback_query #TODO
+        - shipping_query #TODO
+        - pre_checkout_query #TODO
+        - poll #TODO
+        - poll_answer #TODO
+        - my_chat_member #TODO
+        - chat_member #TODO
+        - chat_join_request #TODO
+        - chat_boost #TODO
+        - removed_chat_boost #TODO
+    Message:
+      type: object
+      description: This object represents a message.
+      required:
+        - message_id
+        - date
+        - chat
+      properties:
+        message_id:
+          type: integer
+        date:
+          type: integer
+        chat:
+          $ref: '#/components/schemas/Chat'
+        text:
+          type: string
+    ChatType:
+      enum:
+        - private
+        - group
+        - supergroup
+        - channel
+    Chat:
+      type: object
+      description: 'This object represents a chat.'
+      required:
+        - id
+        - type
+      properties:
+        id:
+          type: integer
+        type:
+          $ref: '#/components/schemas/ChatType'
+        title:
+          type: string
+        username:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
